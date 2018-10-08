@@ -13,7 +13,7 @@ import time
 import copy
 import pandas as pd
 
-DEBUG = True
+DEBUG = False
 
 ## standard training
 def train_baseline(loader, model, opt, epoch, log1, log2, verbose):

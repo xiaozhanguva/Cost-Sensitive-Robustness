@@ -1,8 +1,8 @@
 from mnist import select_model
 
-# import problems as pblm
-# from trainer import *
-# import setproctitle
+import problems as pblm
+from trainer import *
+import setproctitle
 
 if __name__ == "__main__": 
     args = pblm.argparser(prefix='mnist', method='task_spec_robust', opt='adam', 
