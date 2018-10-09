@@ -1,36 +1,20 @@
 import waitGPU
 waitGPU.wait(utilization=20, available_memory=10000, interval=10)
-import os
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import problems as pblm
 from trainer import *
 import setproctitle
 
-def select_model(m): 
-    if m == 'large': 
-        model = pblm.mnist_model_large().cuda()
-        _, test_loader = pblm.mnist_loaders(8)
-    elif m == 'wide': 
-        print("Using wide model with model_factor={}".format(args.model_factor))
-        _, test_loader = pblm.mnist_loaders(64//args.model_factor)
-        model = pblm.mnist_model_wide(args.model_factor).cuda()
-    elif m == 'deep': 
-        print("Using deep model with model_factor={}".format(args.model_factor))
-        _, test_loader = pblm.mnist_loaders(64//(2**args.model_factor))
-        model = pblm.mnist_model_deep(args.model_factor).cuda()
-    else: 
-        model = pblm.mnist_model().cuda() 
-    return model
-
 if __name__ == "__main__": 
     args = pblm.argparser(prefix='mnist', opt='adam', starting_epsilon=0.05, epsilon=0.2, thres=0.04)
+    kwargs = pblm.args2kwargs(args)
     setproctitle.setproctitle('python')
     print("saving file to {}".format(args.proctitle))
 
     if args.method == 'overall_robust':
         print("threshold for classification error: {:.1%}".format(args.thres))
+    elif args.method != 'baseline':
+        raise ValueError("Unknown training method.")
 
     saved_filepath = ('../saved_log/'+args.proctitle)
     model_filepath = os.path.dirname('../models/'+args.proctitle)
@@ -46,15 +30,15 @@ if __name__ == "__main__":
     best_res = open(saved_filepath + "/best_res.txt", "w")
 
     # train-validation split
-    train_loader, valid_loader, test_loader = pblm.mnist_loaders(args.batch_size, args.ratio, args.seed)
+    train_loader, valid_loader, test_loader = pblm.mnist_loaders(batch_size=args.batch_size, 
+                                                                 path='../data', 
+                                                                 ratio=args.ratio, 
+                                                                 seed=args.seed)
     
+    # specify the model and the optimizer
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
-    model = select_model(args.model)
-
-    for X,y in train_loader: 
-        kwargs = pblm.args2kwargs(model, args, X=Variable(X.cuda()))
-        break
+    model = pblm.mnist_model().cuda() 
 
     if args.opt == 'adam': 
         opt = optim.Adam(model.parameters(), lr=args.lr)
@@ -122,7 +106,6 @@ if __name__ == "__main__":
                     '{:.2%}'.format(robust_err_min), file=best_res)
 
         # evaluating the saved best model on the testing dataset
-        model = select_model(args.model) 
         model.load_state_dict(torch.load(model_path))
 
         res_filepath = ('../results/'+args.proctitle)

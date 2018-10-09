@@ -7,7 +7,8 @@ import random
 
 if __name__ == "__main__": 
     args = pblm.argparser(prefix='cifar', method='task_spec_robust', epsilon=0.03486, l1_proj=50, 
-                        l1_train='median', starting_epsilon=0.001, opt='sgd', lr=0.05, thres=0.35)
+                          l1_train='median', starting_epsilon=0.001, opt='sgd', lr=0.05, thres=0.35)
+    kwargs = pblm.args2kwargs(args)
     setproctitle.setproctitle('python')
     print("threshold for classification error: {:.1%}".format(args.thres))
 
@@ -26,22 +27,20 @@ if __name__ == "__main__":
                 args.l1_proj, args.l1_train, args.l1_test), end='\n')
 
     # train-validation split
-    train_loader, _, _ = pblm.cifar_loaders(batch_size=args.batch_size, ratio=args.ratio, seed=args.seed)
-    _, valid_loader, test_loader = pblm.cifar_loaders(batch_size=1, ratio=args.ratio, seed=args.seed)
+    train_loader, _, _ = pblm.cifar_loaders(batch_size=args.batch_size, path='../data',
+                                            ratio=args.ratio, seed=args.seed)
+    _, valid_loader, test_loader = pblm.cifar_loaders(batch_size=1, path='../data',
+                                            ratio=args.ratio, seed=args.seed)
     model = select_model(args.model)
     num_classes = model[-1].out_features
-
-    for X,y in train_loader: 
-        kwargs = pblm.args2kwargs(model, args, X=Variable(X.cuda()))
-        break
 
     # specify the task and the corresponding class semantic
     folder_path = os.path.dirname(args.proctitle)
     if args.type == 'binary':
         input_mat = np.zeros((num_classes,num_classes), dtype=np.int)
         if args.category == 'single_pair':
-            seed_clas = 6
-            targ_clas = 2
+            seed_clas = 3
+            targ_clas = 1
             input_mat[seed_clas,targ_clas] = 1
             folder_path += '/pair_'+str(seed_clas)+'_'+str(targ_clas)
         else:
@@ -78,7 +77,7 @@ if __name__ == "__main__":
     model_path = os.path.join(model_folder, os.path.basename(args.proctitle)+'.pth')
 
     # define the searching grid for alpha
-    alpha_arr = [0.1, 1.0, 10]
+    alpha_arr = [0.1,1.0, 10.0]
     print('Searching grid for alpha:', alpha_arr)
     # raise NotImplementedError()
 

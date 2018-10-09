@@ -1,4 +1,5 @@
-from mnist import select_model
+import waitGPU
+waitGPU.wait(utilization=20, available_memory=10000, interval=10)
 
 import problems as pblm
 from trainer import *
@@ -7,6 +8,7 @@ import setproctitle
 if __name__ == "__main__": 
     args = pblm.argparser(prefix='mnist', method='task_spec_robust', opt='adam', 
                           starting_epsilon=0.05, epsilon=0.2, thres=0.035)
+    kwargs = pblm.args2kwargs(args)
     setproctitle.setproctitle('python')
     print("threshold for classification error: {:.1%}".format(args.thres))
 
@@ -25,13 +27,12 @@ if __name__ == "__main__":
                 args.l1_proj, args.l1_train, args.l1_test), end='\n')
 
     # train-validation split
-    train_loader, valid_loader, test_loader = pblm.mnist_loaders(args.batch_size, args.ratio, args.seed)
-    model = select_model(args.model)
+    train_loader, valid_loader, test_loader = pblm.mnist_loaders(batch_size=args.batch_size, 
+                                                                 path='../data',
+                                                                 ratio=args.ratio, 
+                                                                 seed=args.seed)
+    model = pblm.mnist_model().cuda()
     num_classes = model[-1].out_features
-
-    for X,y in train_loader: 
-        kwargs = pblm.args2kwargs(model, args, X=Variable(X.cuda()))
-        break
 
     # specify the task and construct the corresponding cost matrix 
     folder_path = os.path.dirname(args.proctitle)
@@ -70,7 +71,7 @@ if __name__ == "__main__":
         alpha_arr = np.float_power(10, np.arange(-1,2))
         # raise NotImplementedError()
     elif args.tuning == 'fine':
-        alpha_select = 0.01
+        alpha_select = 0.1
         alpha_arr = np.float_power(2, np.arange(-1,2))*alpha_select
         # raise NotImplementedError()
     else:
@@ -106,7 +107,7 @@ if __name__ == "__main__":
         # specify the model and the optimizer
         torch.manual_seed(args.seed)
         torch.cuda.manual_seed(args.seed)
-        model = select_model(args.model) 
+        model = pblm.mnist_model().cuda()
 
         if args.opt == 'adam': 
             opt = optim.Adam(model.parameters(), lr=args.lr)

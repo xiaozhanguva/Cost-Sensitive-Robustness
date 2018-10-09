@@ -1,17 +1,14 @@
+from convex_adversarial.dual_network import robust_loss, RobustBounds
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from convex_adversarial import robust_loss, calc_err_clas_spec, robust_loss_task_spec
 import torch.optim as optim
+from torch.autograd import Variable
 
 import numpy as np
+import pandas as pd
 import time
 import copy
-import pandas as pd
+import os
 
 DEBUG = False
 
@@ -89,7 +86,6 @@ def evaluate_baseline(loader, model, epoch, log, verbose):
     print(epoch, '{:.4f}'.format(errors.avg), '{:.4f}'.format(losses.avg), file=log)
     log.flush()  
     print(' * Error: {error.avg:.2%}'.format(error=errors))
-
     return errors.avg
 
 ## robust training for overall robustness
@@ -223,7 +219,6 @@ def evaluate_robust(loader, model, epsilon, epoch, log, verbose, **kwargs):
     
     torch.set_grad_enabled(True)
     torch.cuda.empty_cache()
-
     return errors.avg, robust_errors.avg
 
 ## robsut training for cost-sensitive robustness
@@ -369,7 +364,6 @@ def evaluate_robust_task_spec(loader, model, epsilon, epoch, log, verbose,
     log.flush()
     torch.set_grad_enabled(True)
     torch.cuda.empty_cache()
-
     return errors.avg, robust_cost_avg
 
 ## compute the pairwise test robust error w.r.t. a given classifier
@@ -496,8 +490,102 @@ def evaluate_test(loader, model, epsilon, input_mat, mat_type, verbose, **kwargs
                   error=errors, rcost=robust_cost_avg))                  
     torch.set_grad_enabled(True)
     torch.cuda.empty_cache()
-
     return errors.avg, robust_cost_avg
+
+
+## define the metric and training loss function for cost-sensitive robustness
+def robust_loss_task_spec(net, epsilon, X, y, input_mat, mat_type, alpha=1.0, **kwargs):
+    num_classes = net[-1].out_features
+    # loss function for standard classification
+    out = net(X)
+    clas_err = (out.max(1)[1] != y).float().sum().item() / X.size(0)
+    ce_loss = nn.CrossEntropyLoss(reduction='elementwise_mean')(out, y)
+
+    # regularization term for cost-sensitive robustness
+    cost_adv_exps = 0.0    
+    num_exps = 0
+
+    for k in range(num_classes):
+        if np.all(input_mat[k, :] == 0):
+            continue    
+        else:
+            targ_clas = np.nonzero(input_mat[k, :])[0]    # extract the corresponding output classes
+            ind = (y == k).nonzero()   # extract the considered input example indices   
+
+            if len(ind) != 0:
+                ind = ind.squeeze(1)
+                X_sub = X[ind, ...]
+                y_sub = y[ind, ...]
+
+                # robust score matrix
+                f = RobustBounds(net, epsilon, **kwargs)(X_sub,y_sub)[:,targ_clas]
+                zero_col = torch.FloatTensor(np.zeros(len(ind), dtype=float)).cuda()
+                weight_vec = torch.FloatTensor(input_mat[k, targ_clas]).repeat(len(ind),1).cuda() 
+
+                # cost-weighted robust score matrix
+                f_weighted = torch.cat((f + torch.log(weight_vec), zero_col.unsqueeze(1)), dim=1)
+                target = torch.LongTensor(len(targ_clas)*np.ones(len(ind), dtype=float)).cuda()
+                # aggregate the training loss function (including the robust regularizer)
+                ce_loss = ce_loss + alpha*nn.CrossEntropyLoss(reduction='elementwise_mean')(f_weighted, target)
+
+                zero_tensor = torch.FloatTensor(np.zeros(f.size())).cuda()
+                err_mat = (f > zero_tensor).cpu().numpy()
+
+                if mat_type == 'binary':    # same as the number of cost-sensitive adversarial exps
+                    cost_adv_exps += err_mat.max(1).sum().item()               
+                else:   # real-valued case
+                    # use the total costs as the measure
+                    cost_adv_exps += np.dot(np.sum(err_mat, axis=0), input_mat[k,targ_clas])
+                num_exps += len(ind)
+    return clas_err, ce_loss, cost_adv_exps, num_exps
+
+
+## compute the pairwise classification and robust error
+def calc_err_clas_spec(net, epsilon, X, y, **kwargs):
+    num_classes = net[-1].out_features
+    targ_clas = range(num_classes)
+    zero_mat = torch.FloatTensor(X.size(0), num_classes).zero_()
+
+    # aggregate the class-specific classification and robust error counts
+    clas_err_mat = torch.FloatTensor(num_classes+1, num_classes+1).zero_()
+    robust_err_mat = torch.FloatTensor(num_classes+1, num_classes+1).zero_()
+    # aggregate the number of examples for each class
+    num_exps_vec = torch.FloatTensor(num_classes+1).zero_()
+        
+    if X.is_cuda:
+        zero_mat = zero_mat.cuda()
+        clas_err_mat = clas_err_mat.cuda()
+        robust_err_mat = robust_err_mat.cuda()
+        num_exps_vec = num_exps_vec.cuda()
+
+    # compute the class-specific classification error matrix
+    val, idx = torch.max(net(X), dim=1)
+    for j in range(len(y)):
+        row_ind = y[j]
+        col_ind = idx[j].item()
+        if row_ind != col_ind:
+            clas_err_mat[row_ind, col_ind] += 1
+            clas_err_mat[row_ind, num_classes] += 1
+    clas_err_mat[num_classes, ] = torch.sum(clas_err_mat[:num_classes, ], dim=0)
+
+    f = RobustBounds(net, epsilon, **kwargs)(X,y)[:,targ_clas]
+    # robust error counts for each example
+    err_mat = (f > zero_mat).float()    # class-specific robust error counts
+    err = (f.max(1)[1] != y).float()    # overall robust error counts
+
+    # compute pairwise robust error matrix
+    for i in range(num_classes):
+        ind = (y == i).nonzero()    # indices of examples in class i
+        if len(ind) != 0:
+            ind = ind.squeeze(1)  
+            robust_err_mat[i, :num_classes] += torch.sum(err_mat[ind, ].squeeze(1), dim=0)
+            robust_err_mat[i, num_classes] += torch.sum(err[ind])
+        num_exps_vec[i] += len(ind)
+
+    # compute the weighted average for each target class 
+    robust_err_mat[num_classes, ] = torch.sum(robust_err_mat[:num_classes, ], dim=0)
+    num_exps_vec[num_classes] = torch.sum(num_exps_vec[:num_classes])
+    return clas_err_mat, robust_err_mat, num_exps_vec
 
 
 class AverageMeter(object):

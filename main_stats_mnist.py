@@ -1,24 +1,22 @@
-from examples.mnist import select_model
+import waitGPU
+waitGPU.wait(utilization=20, available_memory=10000, interval=10)
+
 from examples.trainer import *
 import examples.problems as pblm
-
-import pandas as pd
 import setproctitle
 
 if __name__ == '__main__':
 	args = pblm.argparser(prefix='mnist', method='task_spec_robust', opt='adam', 
 							starting_epsilon=0.05, epsilon=0.2)
+	kwargs = pblm.args2kwargs(args)
 	setproctitle.setproctitle('python')
 
 	# train-validation split
-	_, _, test_loader = pblm.mnist_loaders(args.batch_size, args.ratio, args.seed)
+	_, _, test_loader = pblm.mnist_loaders(batch_size=args.batch_size, path='./data',
+	 									   ratio=args.ratio, seed=args.seed)
 
-	model = select_model(args.model)
+	model = pblm.mnist_model().cuda()
 	num_classes = model[-1].out_features
-
-	for X,y in test_loader: 
-		kwargs = pblm.args2kwargs(model, args, X=Variable(X.cuda()))
-		break
 
 	# specify the task and the corresponding class semantic
 	folder_path = os.path.dirname(args.proctitle)

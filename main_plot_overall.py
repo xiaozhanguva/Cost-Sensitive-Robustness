@@ -1,6 +1,5 @@
 import examples.problems as pblm
 from examples.heatmap import *
-import setproctitle
 import pandas as pd
 import os
 
@@ -11,7 +10,8 @@ plt.rcdefaults()
 if __name__ == '__main__':
     # robust heatmap for MNIST
     num_classes = 10        # in total, 10 digit classes for MNIST
-    args = pblm.argparser(prefix='mnist', opt='adam', starting_epsilon=0.05, epsilon=0.2)
+    args = pblm.argparser(prefix='mnist', method='overall_robust', 
+                          opt='adam', starting_epsilon=0.05, epsilon=0.2)
     labels = ['digit ' + x for x in list(map(str, range(num_classes)))]
     filepath = ('results/'+args.proctitle+'_robustProbs.csv')
 

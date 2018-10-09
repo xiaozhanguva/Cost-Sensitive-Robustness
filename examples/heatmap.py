@@ -70,9 +70,7 @@ def heatmap(data, row_labels, col_labels, ax=None,
     ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
     ax.tick_params(which="minor", bottom=False, left=False)
     ax.patch.set(hatch='xxx', edgecolor='black')
-
     return im
-    # return im, cbar
 
 
 def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
@@ -126,6 +124,5 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
                 kw.update(color=textcolors[im.norm(data[i, j]) > threshold])
                 text = im.axes.text(j, i, valfmt(data[i, j], None), **kw)
                 texts.append(text)
-
     return texts
 

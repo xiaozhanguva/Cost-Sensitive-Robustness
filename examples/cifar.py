@@ -5,22 +5,26 @@ import problems as pblm
 from trainer import *
 import setproctitle
 import random
-    
+
 def select_model(m): 
     if m == 'large': 
         # raise ValueError
         model = pblm.cifar_model_large().cuda()
-    elif m == 'resnet': 
-        model = pblm.cifar_model_resnet(N=args.resnet_N, factor=args.resnet_factor).cuda()
     else: 
         model = pblm.cifar_model().cuda() 
     return model
 
 if __name__ == "__main__": 
     args = pblm.argparser(prefix='cifar', epsilon=0.03486, starting_epsilon=0.001, 
-                        l1_proj=50, l1_train='median', opt='sgd', lr=0.05, ratio=0)
+                          l1_proj=50, l1_train='median', opt='sgd', lr=0.05, ratio=0)
     setproctitle.setproctitle('python')
+    kwargs = pblm.args2kwargs(args)
     print("saving file to {}".format(args.proctitle))
+
+    if args.method == 'overall_robust':
+        print("threshold for classification error: {:.1%}".format(args.thres))
+    elif args.method != 'baseline':
+        raise ValueError("Unknown training method.")
 
     saved_filepath = ('../saved_log/'+args.proctitle)
     model_filepath = os.path.dirname('../models/'+args.proctitle)
@@ -34,19 +38,18 @@ if __name__ == "__main__":
     train_res = open(saved_filepath + '/train_res.txt', "w")
 
     # generate dataloader for train with batch size=50
-    train_loader, _ = pblm.cifar_loaders(batch_size=args.batch_size, ratio=args.ratio, seed=args.seed)
+    train_loader, _ = pblm.cifar_loaders(batch_size=args.batch_size, path='../data', 
+                                         ratio=args.ratio, seed=args.seed)
     # generate dataloader for test with batch size=1 (avoid GPU memory overflow)
-    _, test_loader = pblm.cifar_loaders(batch_size=1, ratio=args.ratio, seed=args.seed)
+    _, test_loader = pblm.cifar_loaders(batch_size=1, path='../data',
+                                        ratio=args.ratio, seed=args.seed)
 
+    # specify the model and the optimizer
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     random.seed(0)
     np.random.seed(0)
-    model = select_model(args.model)
-
-    for X,y in train_loader: 
-        kwargs = pblm.args2kwargs(model, args, X)
-        break
+    model = select_model(args.model) 
 
     if args.opt == 'adam': 
         opt = optim.Adam(model_path.parameters(), lr=args.lr)
