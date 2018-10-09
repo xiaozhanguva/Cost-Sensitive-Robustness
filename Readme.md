@@ -14,11 +14,11 @@ conda update -n base conda && conda install pytorch=0.4.1 torchvision -c pytorch
 * Install convex_adversarial package developed by Eric Wong and Zico Kolter
 [[see details]](https://github.com/locuslab/convex_adversarial/tree/master/convex_adversarial):
 ```text
-pip install convex_adversarial=0.3.5 -I --user torch==0.4.1
+pip install --upgrade pip && pip install convex_adversarial==0.3.5 -I --user torch==0.4.1
 ```
 * Install other dependencies:
 ```text
-pip install --upgrade pip && pip install torch waitGPU setproctitle
+pip install torch waitGPU setproctitle
 ```
 
 * Examples for training the cost-sensitive robust classifier:
