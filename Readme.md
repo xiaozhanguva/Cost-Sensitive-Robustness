@@ -1,5 +1,5 @@
 # Cost-Sensitive Robustness against Adversarial Examples
-The goal of this project [link to the original ArXiv paper](https://arxiv.org/pdf/1810.09225.pdf):
+The goal of this project [(link to the original ArXiv paper)](https://arxiv.org/pdf/1810.09225.pdf):
 * For any pre-designed cost matrix, define the cost-sensitive robustness for neural network classifiers
 * Develop a general method for training certified cost-sensitive robust classifier against 
 ![l_infty](https://latex.codecogs.com/gif.latex?%5Cell_%5Cinfty) adversarial attack
